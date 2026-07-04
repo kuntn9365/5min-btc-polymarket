@@ -30,13 +30,14 @@ while true; do
   out=$(cd "$REPO" && .venv/bin/python "$PY" --profile conservative --threshold "$THRESHOLD" --stake-usd "$STAKE" --entry-timeout-min 8 --poll-sec 2 --execute 2>&1 || true)
   echo "$out" >> "$LOG"
 
-  # if decision enter and runner returned success/matched -> stop
-  if echo "$out" | grep -q '"decision": "enter"'; then
-    if echo "$out" | grep -q '"success": true\|"status": "matched"\|"order_post_result"'; then
-      echo "[$(date -u +%FT%TZ)] entry attempted, stopping watcher" | tee -a "$LOG"
-      echo "entered_at=$(date -u +%FT%TZ)" > "$STATE"
-      exit 0
-    fi
+  # Canonical runner prints a final JSON report. It contains an "opened" block
+  # only when a position was actually taken; a run with no trade ends with
+  # result "no_entry_timeout" (no "opened" key). Stop the watcher as soon as a
+  # trade was opened so we do not re-run the runner and open another position.
+  if echo "$out" | grep -q '"opened":'; then
+    echo "[$(date -u +%FT%TZ)] entry opened, stopping watcher" | tee -a "$LOG"
+    echo "entered_at=$(date -u +%FT%TZ)" > "$STATE"
+    exit 0
   fi
 
   sleep "$SLEEP_SEC"
